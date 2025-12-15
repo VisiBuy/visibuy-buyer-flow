@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply font-sans text-neutral-900 bg-neutral-100;
+}
+
+.visibuy-container {
+  @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+}
+
+.visibuy-card {
+  @apply rounded-card bg-neutral-50 shadow-level1;
+}
+
+.visibuy-input {
+  @apply h-12 w-full rounded-input border border-neutral-300 bg-white px-3 text-base text-neutral-900 placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary;
+}
