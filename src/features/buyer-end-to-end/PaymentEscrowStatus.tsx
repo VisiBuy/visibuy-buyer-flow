@@ -279,7 +279,7 @@ const PaymentEscrowStatus = () => {
                   block
                   type="primary"
                   size="large"
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border-none h-12 font-bold text-sm md:text-base shadow-md hover:shadow-lg transition-all duration-300"
+                  className="bg-[#9CA3AF] 600 hover:[#374151] border-none h-12 font-bold text-sm md:text-base shadow-md hover:shadow-lg transition-all duration-300"
                   onClick={() => setShowVerificationModal(true)}
                 >
                   Release Payment
@@ -288,7 +288,7 @@ const PaymentEscrowStatus = () => {
                   block
                   variant="outlined"
                   size="large"
-                  className="h-12 font-bold border-gray-300 text-sm md:text-base hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition-all"
+                  className="h-12 font-bold border-[#374151] text-sm md:text-base hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition-all"
                   onClick={() => setShowDisputeModal(true)}
                 >
                   Open Dispute
@@ -322,7 +322,7 @@ const PaymentEscrowStatus = () => {
                 <input
                   key={index}
                   type="text"
-                  maxLength="1"
+                //   maxLength="1"
                   className="w-10 h-12 md:w-12 md:h-14 border border-gray-300 rounded-lg text-center font-bold text-lg md:text-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
                   value={data}
                   onChange={(e) => handleOtpChange(e.target, index)}
