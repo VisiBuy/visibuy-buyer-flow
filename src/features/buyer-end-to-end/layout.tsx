@@ -9,8 +9,7 @@ export default function VerificationLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="w-full min-h-screen bg-gray-50 p-6 px-10 relative text-[#020617]">
-    
+    <div className="w-full min-h-screen bg-[#f5f5f5] p-6 lg:px-10 px-5  text-[#020617]">
       <Header />
 
       {/* Main content area */}
