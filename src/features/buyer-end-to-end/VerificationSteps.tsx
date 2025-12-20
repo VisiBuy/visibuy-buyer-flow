@@ -22,7 +22,7 @@ const VerificationSteps: React.FC<StepProps> = ({ currentStep, onStepChange }) =
             <span
               className={`w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center text-[10px] md:text-xs ${
                 currentStep >= step.number
-                  ? "bg-blue-600 text-white"
+                  ? "bg-[#475569] text-white"
                   : "border border-gray-300 text-gray-400"
               }`}
             >
