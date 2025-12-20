@@ -14,7 +14,7 @@ export default function VerificationLayout({
       <Header />
 
       {/* Main content area */}
-      <main>{children}</main>
+      <main className="">{children}</main>
     </div>
   );
 }

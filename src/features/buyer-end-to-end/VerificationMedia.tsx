@@ -34,8 +34,7 @@ const VerificationMedia = () => {
 
   return (
     <VerificationLayout>
-      <div className="w-full min-h-screen bg-gray-50 p-3 md:p-6 lg:px-10 relative text-[#020617]">
-
+      <div className="w-full min-h-screen bg-gray-50 p-3 md:p-6 lg:px-20 px-5 relative text-[#020617]">
         {/* Steps - Made responsive */}
         <div className="flex items-center justify-center gap-2 md:gap-4 lg:gap-6 mb-6 md:mb-8 text-xs md:text-sm">
           <div className="flex items-center gap-1 md:gap-2">
