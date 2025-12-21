@@ -28,7 +28,7 @@ const VerificationWorkflow = () => {
       <VerificationSteps currentStep={currentStep} />
       
       {currentStep === 1 && (
-        <PaymentEscrowStatusContent 
+        <VerificationMediaContent 
           onComplete={handleStepComplete}
           onBack={handleStepBack}
         />
