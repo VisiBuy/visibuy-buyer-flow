@@ -5,10 +5,13 @@ import {
   VerificationResponse,
 } from "@/types/verificationServiceTypes";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "https://visibuy-staging-api.onrender.com/api/v1";
 
-// Define but don't export here
-interface UploadProgress {
+console.log("API_BASE_URL:", API_BASE_URL);
+
+export interface UploadProgress {
   loaded: number;
   total: number;
   percentage: number;
@@ -22,8 +25,9 @@ class VerificationService {
       try {
         const errorData: ApiError = await response.json();
         errorMessage = errorData.message || errorMessage;
+        console.error("API Error:", errorData);
       } catch {
-        // If response is not JSON, use default message
+        console.error("Failed to parse error response");
       }
 
       throw new Error(errorMessage);
@@ -32,96 +36,23 @@ class VerificationService {
     try {
       return await response.json();
     } catch (error) {
+      console.error("Failed to parse response:", error);
       throw new Error("Invalid response from server");
     }
   }
 
-  async createVerification(
-    data: CreateVerificationRequest,
-    onProgress?: (progress: UploadProgress) => void
+  // GET verification by public token (NO AUTH NEEDED)
+  async getVerificationByToken(
+    publicToken: string
   ): Promise<VerificationResponse> {
-    const formData = new FormData();
-
-    // Append text fields
-    formData.append("productTitle", data.productTitle);
-    formData.append("description", data.description);
-    formData.append("price", data.price.toString());
-    formData.append("escrowEnabled", data.escrowEnabled.toString());
-    formData.append("expiresAt", data.expiresAt);
-
-    // Append files
-    data.files.forEach((file, index) => {
-      formData.append("files", file, file.name);
-    });
-
     try {
-      const xhr = new XMLHttpRequest();
+      const url = `${API_BASE_URL}/verifications/public/${publicToken}`;
+      console.log("Fetching verification from URL:", url);
 
-      return new Promise((resolve, reject) => {
-        xhr.open("POST", `${API_BASE_URL}/verifications`);
-
-        xhr.setRequestHeader("Accept", "application/json");
-
-        // Track upload progress
-        xhr.upload.onprogress = (event) => {
-          if (onProgress && event.lengthComputable) {
-            onProgress({
-              loaded: event.loaded,
-              total: event.total,
-              percentage: Math.round((event.loaded / event.total) * 100),
-            });
-          }
-        };
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const response = JSON.parse(xhr.responseText);
-              resolve(response);
-            } catch (error) {
-              reject(new Error("Failed to parse response"));
-            }
-          } else {
-            try {
-              const errorData = JSON.parse(xhr.responseText);
-              reject(
-                new Error(
-                  errorData.message ||
-                    `Request failed with status ${xhr.status}`
-                )
-              );
-            } catch {
-              reject(new Error(`Request failed with status ${xhr.status}`));
-            }
-          }
-        };
-
-        xhr.onerror = () => {
-          reject(new Error("Network error occurred"));
-        };
-
-        xhr.ontimeout = () => {
-          reject(new Error("Request timed out"));
-        };
-
-        // Set timeout to 2 minutes (120000 ms)
-        xhr.timeout = 120000;
-
-        xhr.send(formData);
-      });
-    } catch (error) {
-      console.error("Error creating verification:", error);
-      throw error;
-    }
-  }
-
-  async getVerification(id: string): Promise<VerificationResponse> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/verifications/${id}`, {
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           accept: "application/json",
-          "Content-Type": "application/json",
         },
       });
 
@@ -132,30 +63,150 @@ class VerificationService {
     }
   }
 
+  // Approve verification (public endpoint)
+  async approveVerification(
+    publicToken: string
+  ): Promise<VerificationResponse> {
+    try {
+      const url = `${API_BASE_URL}/verifications/public/${publicToken}/approve`;
+      console.log("Approving verification:", url);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      });
+
+      return await this.handleResponse<VerificationResponse>(response);
+    } catch (error) {
+      console.error("Error approving verification:", error);
+      throw error;
+    }
+  }
+
+  // Reject verification (public endpoint)
+  async rejectVerification(
+    publicToken: string,
+    rejectionData: {
+      reason: string;
+      comment?: string;
+    }
+  ): Promise<VerificationResponse> {
+    try {
+      const url = `${API_BASE_URL}/verifications/public/${publicToken}/reject`;
+      console.log("Rejecting verification:", url);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(rejectionData),
+      });
+
+      return await this.handleResponse<VerificationResponse>(response);
+    } catch (error) {
+      console.error("Error rejecting verification:", error);
+      throw error;
+    }
+  }
+
+  // Submit buyer info for escrow (public endpoint)
+  async submitBuyerInfo(
+    publicToken: string,
+    buyerInfo: {
+      fullName: string;
+      email: string;
+      phoneNumber: string;
+      address: string;
+      date: string;
+      country: string;
+    }
+  ): Promise<VerificationResponse> {
+    try {
+      const url = `${API_BASE_URL}/verifications/public/${publicToken}/buyer-info`;
+      console.log("Submitting buyer info:", url);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(buyerInfo),
+      });
+
+      return await this.handleResponse<VerificationResponse>(response);
+    } catch (error) {
+      console.error("Error submitting buyer info:", error);
+      throw error;
+    }
+  }
+
+  // Request payment (for escrow) - public endpoint
+  async requestPayment(
+    publicToken: string,
+    paymentData?: any
+  ): Promise<{ paymentUrl: string }> {
+    try {
+      const url = `${API_BASE_URL}/verifications/public/${publicToken}/request-payment`;
+      console.log("Requesting payment:", url);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: paymentData ? JSON.stringify(paymentData) : undefined,
+      });
+
+      return await this.handleResponse<{ paymentUrl: string }>(response);
+    } catch (error) {
+      console.error("Error requesting payment:", error);
+      throw error;
+    }
+  }
+
+  // Upload additional media (public endpoint)
   async uploadAdditionalMedia(
-    verificationId: string,
+    publicToken: string,
     files: File[],
     onProgress?: (progress: UploadProgress) => void
   ): Promise<VerificationResponse> {
     const formData = new FormData();
 
     files.forEach((file, index) => {
+      console.log(
+        `Appending additional file ${index}:`,
+        file.name,
+        file.type,
+        file.size
+      );
       formData.append("files", file, file.name);
     });
 
     try {
       const xhr = new XMLHttpRequest();
 
+      const url = `${API_BASE_URL}/verifications/public/${publicToken}/media`;
+      console.log("POST URL for additional media:", url);
+
       return new Promise((resolve, reject) => {
-        xhr.open(
-          "POST",
-          `${API_BASE_URL}/verifications/${verificationId}/media`
-        );
+        xhr.open("POST", url);
 
         xhr.setRequestHeader("Accept", "application/json");
 
-        // Track upload progress
         xhr.upload.onprogress = (event) => {
+          console.log(
+            "Additional media upload progress:",
+            event.loaded,
+            "of",
+            event.total
+          );
           if (onProgress && event.lengthComputable) {
             onProgress({
               loaded: event.loaded,
@@ -166,16 +217,24 @@ class VerificationService {
         };
 
         xhr.onload = () => {
+          console.log("Response status for additional media:", xhr.status);
+
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const response = JSON.parse(xhr.responseText);
+              console.log("Additional media success:", response);
               resolve(response);
             } catch (error) {
-              reject(new Error("Failed to parse response"));
+              console.error(
+                "Failed to parse additional media response:",
+                error
+              );
+              reject(new Error("Failed to parse response from server"));
             }
           } else {
             try {
               const errorData = JSON.parse(xhr.responseText);
+              console.error("Additional media error:", errorData);
               reject(
                 new Error(
                   errorData.message ||
@@ -189,16 +248,18 @@ class VerificationService {
         };
 
         xhr.onerror = () => {
+          console.error("Additional media XHR error");
           reject(new Error("Network error occurred"));
         };
 
         xhr.ontimeout = () => {
+          console.error("Additional media XHR timeout");
           reject(new Error("Request timed out"));
         };
 
-        // Set timeout to 2 minutes (120000 ms)
         xhr.timeout = 120000;
 
+        console.log("Sending additional media request...");
         xhr.send(formData);
       });
     } catch (error) {
@@ -206,87 +267,7 @@ class VerificationService {
       throw error;
     }
   }
-
-  async submitBuyerInfo(
-    verificationId: string,
-    buyerInfo: {
-      fullName: string;
-      email: string;
-      phoneNumber: string;
-      address: string;
-      date: string;
-      country: string;
-    }
-  ): Promise<VerificationResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/verifications/${verificationId}/buyer-info`,
-        {
-          method: "POST",
-          headers: {
-            accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(buyerInfo),
-        }
-      );
-
-      return await this.handleResponse<VerificationResponse>(response);
-    } catch (error) {
-      console.error("Error submitting buyer info:", error);
-      throw error;
-    }
-  }
-
-  async rejectVerification(
-    verificationId: string,
-    rejectionData: {
-      reason: string;
-      comment?: string;
-    }
-  ): Promise<VerificationResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/verifications/${verificationId}/reject`,
-        {
-          method: "POST",
-          headers: {
-            accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(rejectionData),
-        }
-      );
-
-      return await this.handleResponse<VerificationResponse>(response);
-    } catch (error) {
-      console.error("Error rejecting verification:", error);
-      throw error;
-    }
-  }
-
-  async approveVerification(
-    verificationId: string
-  ): Promise<VerificationResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/verifications/${verificationId}/approve`,
-        {
-          method: "POST",
-          headers: {
-            accept: "application/json",
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      return await this.handleResponse<VerificationResponse>(response);
-    } catch (error) {
-      console.error("Error approving verification:", error);
-      throw error;
-    }
-  }
 }
 
 export const verificationService = new VerificationService();
-export type { CreateVerificationRequest, VerificationResponse, UploadProgress };
+export type { CreateVerificationRequest, VerificationResponse, };

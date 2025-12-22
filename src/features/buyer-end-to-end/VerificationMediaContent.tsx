@@ -28,6 +28,7 @@ import {
   type VerificationResponse,
   type UploadProgress,
 } from "@/services/verificationService";
+import { useSearchParams } from "next/navigation";
 
 const { TextArea } = Input;
 const { Dragger } = Upload;
@@ -46,14 +47,17 @@ interface MediaItem {
 interface VerificationMediaContentProps {
   onComplete: () => void;
   onBack?: () => void;
-  verificationId?: string; // For editing existing verification
 }
 
 const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
   onComplete,
   onBack,
-  verificationId,
 }) => {
+  const searchParams = useSearchParams();
+
+  // Get public token from URL query parameter
+  const publicToken = searchParams.get("token") || "222"; // Default to example token
+
   const [showPaymentNotice, setShowPaymentNotice] = useState(false);
   const [showBuyerInfo, setShowBuyerInfo] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -66,7 +70,13 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
       type: "image",
       url: "",
       name: "Main Photo",
-      timestamp: "11-10-2025",
+      timestamp: new Date()
+        .toLocaleDateString("en-US", {
+          month: "2-digit",
+          day: "2-digit",
+          year: "numeric",
+        })
+        .replace(/\//g, "-"),
     },
     { id: "2", type: "image", url: "", name: "Photo 1" },
     { id: "3", type: "image", url: "", name: "Photo 2" },
@@ -91,7 +101,7 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
   // Loading states
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start with loading true
   const [verificationData, setVerificationData] =
     useState<VerificationResponse | null>(null);
 
@@ -99,26 +109,28 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [currentUploadPhase, setCurrentUploadPhase] = useState<
-    "processing" | "uploading" | "complete" | "error"
-  >("processing");
+    "idle" | "processing" | "uploading" | "complete" | "error"
+  >("idle");
 
   const [selectedMediaIndex, setSelectedMediaIndex] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load verification data if editing
+  // Load verification data on component mount
   useEffect(() => {
-    if (verificationId) {
-      loadVerificationData();
-    }
-  }, [verificationId]);
+    loadVerificationData();
+  }, [publicToken]);
 
   const loadVerificationData = async () => {
     setIsLoading(true);
     try {
-      const data = await verificationService.getVerification(verificationId!);
+      console.log("Loading verification with token:", publicToken);
+      const data = await verificationService.getVerificationByToken(
+        publicToken
+      );
       setVerificationData(data);
+      console.log("Verification data loaded:", data);
 
-      // Map API data to media items
+      // Map API data to media items if available
       if (data.mediaUrls && data.mediaUrls.length > 0) {
         const newMediaItems = [...mediaItems];
         data.mediaUrls.forEach((url, index) => {
@@ -126,14 +138,14 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
             newMediaItems[index] = {
               ...newMediaItems[index],
               url,
-              name: `Photo ${index + 1}`,
+              name: index === 0 ? "Main Photo" : `Photo ${index}`,
             };
           }
         });
         setMediaItems(newMediaItems);
       }
-    } catch (error) {
-      message.error("Failed to load verification data");
+    } catch (error: any) {
+      message.error(error.message || "Failed to load verification data");
       console.error(error);
     } finally {
       setIsLoading(false);
@@ -172,13 +184,10 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
         // DONE state
         reader.abort();
         setUploadingIndex(null);
+        setCurrentUploadPhase("error");
         showTemporaryError(index, "File processing timed out");
       }
     }, 10000);
-
-    reader.onloadstart = () => {
-      // Processing started
-    };
 
     reader.onload = (e) => {
       clearTimeout(readTimeout);
@@ -219,6 +228,7 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
     reader.onabort = () => {
       clearTimeout(readTimeout);
       setUploadingIndex(null);
+      setCurrentUploadPhase("error");
       showTemporaryError(index, "File upload was cancelled.");
     };
 
@@ -227,12 +237,13 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
     } catch (error) {
       clearTimeout(readTimeout);
       setUploadingIndex(null);
+      setCurrentUploadPhase("error");
       showTemporaryError(index, "Failed to read file. It may be corrupted.");
     }
   };
 
-  const showTemporaryError = (index: number, message: string) => {
-    setUploadErrors((prev) => ({ ...prev, [index]: message }));
+  const showTemporaryError = (index: number, errorMessage: string) => {
+    setUploadErrors((prev) => ({ ...prev, [index]: errorMessage }));
 
     // Clear error after 3 seconds
     setTimeout(() => {
@@ -267,7 +278,16 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
       url: "",
       file: undefined,
       name: index === 0 ? "Main Photo" : `Photo ${index}`,
-      timestamp: index === 0 ? "11-10-2025" : undefined,
+      timestamp:
+        index === 0
+          ? new Date()
+              .toLocaleDateString("en-US", {
+                month: "2-digit",
+                day: "2-digit",
+                year: "numeric",
+              })
+              .replace(/\//g, "-")
+          : undefined,
     };
     setMediaItems(newMediaItems);
     clearUploadError(index);
@@ -293,62 +313,31 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
     input.click();
   };
 
-  // Handle approval and API call
+  // Handle approval of existing verification
   const handleApproveProduct = async () => {
-    if (isSubmitting) return;
+    if (isSubmitting || !publicToken) return;
 
     setIsSubmitting(true);
-    setCurrentUploadPhase("uploading");
-    setUploadProgress(0);
-    setUploadErrors({});
 
     try {
-      // Filter out files that have been uploaded
-      const files = mediaItems
-        .filter((item) => item.file)
-        .map((item) => item.file!);
-
-      if (files.length === 0) {
-        message.warning("Please upload at least one image or video");
-        setIsSubmitting(false);
-        setCurrentUploadPhase("processing");
-        return;
-      }
-
-      const verificationData = {
-        productTitle: "iPhone 14 Pro Max – 256GB Space Black",
-        description:
-          "Brand new iPhone 14 Pro Max in Space Black, 256GB storage",
-        price: 99999, // Price in cents or base unit
-        escrowEnabled: true,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-        files,
-      };
-
-      const response = await verificationService.createVerification(
-        verificationData,
-        (progress) => {
-          setUploadProgress(progress.percentage);
-        }
+      console.log("Approving verification with token:", publicToken);
+      const response = await verificationService.approveVerification(
+        publicToken
       );
 
-      setCurrentUploadPhase("complete");
-      setUploadProgress(100);
-      message.success("Verification submitted successfully!");
+      message.success("Product approved successfully!");
 
-      // Store verification ID for future updates
-      localStorage.setItem("currentVerificationId", response.id);
-
-      // Show payment notice after a brief delay
-      setTimeout(() => {
+      // Check if verification has escrow enabled
+      if (response.escrowEnabled) {
+        // Show payment notice for escrow-enabled verifications
         setShowPaymentNotice(true);
-        setCurrentUploadPhase("processing");
-        setUploadProgress(0);
-      }, 500);
+      } else {
+        // If no escrow, just complete the flow
+        onComplete();
+      }
     } catch (error: any) {
-      setCurrentUploadPhase("error");
       message.error(
-        error.message || "Failed to submit verification. Please try again."
+        error.message || "Failed to approve product. Please try again."
       );
       console.error(error);
     } finally {
@@ -356,21 +345,30 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
     }
   };
 
-  // Handle buyer info submission
+  // Handle buyer info submission for escrow
   const handleBuyerInfoSubmit = async () => {
-    if (isSubmitting) return;
+    if (isSubmitting || !publicToken) return;
 
     setIsSubmitting(true);
     try {
-      const verificationId = localStorage.getItem("currentVerificationId");
-      if (!verificationId) {
-        throw new Error("No verification found");
-      }
+      console.log("Submitting buyer info for token:", publicToken);
 
-      await verificationService.submitBuyerInfo(verificationId, buyerForm);
+      await verificationService.submitBuyerInfo(publicToken, buyerForm);
+
+      // After submitting buyer info, request payment URL
+      const paymentResponse = await verificationService.requestPayment(
+        publicToken
+      );
+
       message.success("Buyer information submitted successfully!");
       setShowBuyerInfo(false);
-      onComplete(); // Move to next step
+
+      // Redirect to payment URL
+      if (paymentResponse.paymentUrl) {
+        window.location.href = paymentResponse.paymentUrl;
+      } else {
+        onComplete();
+      }
     } catch (error: any) {
       message.error(error.message || "Failed to submit buyer information");
       console.error(error);
@@ -379,23 +377,19 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
     }
   };
 
-  // Handle rejection
+  // Handle rejection of verification
   const handleRejectSubmit = async () => {
-    if (isSubmitting) return;
+    if (isSubmitting || !publicToken) return;
 
     setIsSubmitting(true);
     try {
-      const verificationId = localStorage.getItem("currentVerificationId");
-      if (!verificationId) {
-        throw new Error("No verification found");
-      }
+      console.log("Rejecting verification with token:", publicToken);
 
-      await verificationService.rejectVerification(
-        verificationId,
-        rejectionForm
-      );
+      await verificationService.rejectVerification(publicToken, rejectionForm);
+
       message.success("Verification rejected successfully");
       setShowRejectModal(false);
+      onComplete();
     } catch (error: any) {
       message.error(error.message || "Failed to reject verification");
       console.error(error);
@@ -404,9 +398,9 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
     }
   };
 
-  // Upload additional media
+  // Upload additional media to existing verification
   const handleBulkUpload = async (files: File[]) => {
-    if (isSubmitting) return;
+    if (isSubmitting || !publicToken) return;
 
     setIsSubmitting(true);
     setCurrentUploadPhase("uploading");
@@ -414,59 +408,39 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
     setUploadErrors({});
 
     try {
-      const verificationId = localStorage.getItem("currentVerificationId");
-      if (!verificationId) {
-        // If no existing verification, create a new one
-        const verificationData = {
-          productTitle: "iPhone 14 Pro Max – 256GB Space Black",
-          description:
-            "Brand new iPhone 14 Pro Max in Space Black, 256GB storage",
-          price: 99999,
-          escrowEnabled: true,
-          expiresAt: new Date(
-            Date.now() + 7 * 24 * 60 * 60 * 1000
-          ).toISOString(),
-          files,
-        };
+      console.log("Uploading additional media for token:", publicToken);
 
-        const response = await verificationService.createVerification(
-          verificationData,
-          (progress) => {
-            setUploadProgress(progress.percentage);
-          }
-        );
-        localStorage.setItem("currentVerificationId", response.id);
-      } else {
-        // Add to existing verification
-        await verificationService.uploadAdditionalMedia(
-          verificationId,
-          files,
-          (progress) => {
-            setUploadProgress(progress.percentage);
-          }
-        );
-      }
+      await verificationService.uploadAdditionalMedia(
+        publicToken,
+        files,
+        (progress) => {
+          setUploadProgress(progress.percentage);
+        }
+      );
 
       setCurrentUploadPhase("complete");
       setUploadProgress(100);
 
       // Update local state with uploaded files
+      const newMediaItems = [...mediaItems];
       files.forEach((file, index) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const result = e.target?.result as string;
           const isVideo = file.type.startsWith("video/");
 
-          setMediaItems((prev) => [
-            ...prev,
-            {
-              id: Date.now().toString() + index,
-              type: isVideo ? "video" : "image",
-              url: result,
-              file,
-              name: file.name,
-            },
-          ]);
+          newMediaItems.push({
+            id: Date.now().toString() + index,
+            type: isVideo ? "video" : "image",
+            url: result,
+            file,
+            name: file.name,
+          });
+
+          // Update state after all files are processed
+          if (index === files.length - 1) {
+            setMediaItems(newMediaItems);
+          }
         };
         reader.readAsDataURL(file);
       });
@@ -475,7 +449,7 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
 
       setTimeout(() => {
         setShowUploadModal(false);
-        setCurrentUploadPhase("processing");
+        setCurrentUploadPhase("idle");
         setUploadProgress(0);
       }, 500);
     } catch (error: any) {
@@ -504,15 +478,7 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
       return (
         <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100">
           <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} />
-          <span className="text-xs text-gray-500 mt-2">
-            {currentUploadPhase === "processing"
-              ? "Processing..."
-              : currentUploadPhase === "uploading"
-              ? "Uploading..."
-              : currentUploadPhase === "complete"
-              ? "Complete!"
-              : "Error"}
-          </span>
+          <span className="text-xs text-gray-500 mt-2">Processing...</span>
         </div>
       );
     }
@@ -561,41 +527,48 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
     );
   };
 
-  const renderProgressBar = () => {
-    if (currentUploadPhase === "uploading" && uploadProgress > 0) {
-      return (
-        <div className="fixed top-0 left-0 right-0 z-50">
-          <Progress
-            percent={uploadProgress}
-            status="active"
-            strokeColor={{
-              "0%": "#108ee9",
-              "100%": "#87d068",
-            }}
-            showInfo={false}
-          />
-          <div className="text-center text-xs mt-1">
-            Uploading: {uploadProgress}%
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-[400px]">
         <Spin size="large" />
+        <span className="ml-3">Loading verification data...</span>
       </div>
     );
   }
 
   return (
     <>
-      {renderProgressBar()}
+      {/* Fixed Progress Bar - Only show when uploading */}
+      {currentUploadPhase === "uploading" && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md">
+          <div className="max-w-4xl mx-auto p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Spin size="small" />
+                <span className="text-sm font-medium">
+                  Uploading additional media...
+                </span>
+              </div>
+              <span className="text-sm font-medium">{uploadProgress}%</span>
+            </div>
+            <Progress
+              percent={uploadProgress}
+              status="active"
+              strokeColor={{
+                "0%": "#108ee9",
+                "100%": "#87d068",
+              }}
+              showInfo={false}
+            />
+          </div>
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
+      <div
+        className={`grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 ${
+          currentUploadPhase === "uploading" ? "mt-20" : ""
+        }`}
+      >
         {/* Media Section */}
         <div className="lg:col-span-8 bg-white rounded-xl border p-3 md:p-4">
           <div className="flex items-center justify-between mb-3">
@@ -707,8 +680,7 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
 
           <div className="mt-4 text-xs md:text-sm">
             <p className="font-medium text-sm md:text-base">
-              {verificationData?.productTitle ||
-                "iPhone 14 Pro Max – 256GB Space Black"}
+              {verificationData?.productTitle || "Product Title"}
             </p>
             <div className="flex justify-between text-gray-500 mt-1">
               <span>
@@ -743,7 +715,7 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
             <div className="flex items-center justify-between">
               <span className="font-medium">Escrow Protection</span>
               <Checkbox
-                checked={verificationData?.escrowEnabled ?? true}
+                checked={verificationData?.escrowEnabled ?? false}
                 disabled
               />
             </div>
@@ -767,22 +739,30 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
             <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-200 flex items-center justify-center mb-3">
               <UserOutlined className="text-xl md:text-2xl text-gray-400" />
             </div>
-            <h4 className="font-semibold text-sm md:text-base">Seller Name</h4>
+            <h4 className="font-semibold text-sm md:text-base">
+              {verificationData?.sellerName || "Seller Name"}
+            </h4>
             <p className="text-xs text-gray-500 mb-4">Seller Information</p>
           </div>
 
           <div className="text-xs md:text-sm space-y-2">
             <div className="flex justify-between">
               <span className="text-gray-500">Trust Score</span>
-              <span className="font-medium">98/100</span>
+              <span className="font-medium">
+                {verificationData?.trustScore || "98/100"}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Total Sales</span>
-              <span className="font-medium">100</span>
+              <span className="font-medium">
+                {verificationData?.totalSales || "100"}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Response Time</span>
-              <span className="font-medium text-green-600">2 hours</span>
+              <span className="font-medium text-green-600">
+                {verificationData?.responseTime || "2 hours"}
+              </span>
             </div>
           </div>
 
@@ -816,13 +796,7 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
           }`}
         >
           {isSubmitting ? <LoadingOutlined spin /> : <CheckOutlined />}
-          <span>
-            {isSubmitting
-              ? currentUploadPhase === "uploading"
-                ? `${uploadProgress}%`
-                : "Submitting..."
-              : "Approve Product"}
-          </span>
+          <span>{isSubmitting ? "Processing..." : "Approve Product"}</span>
         </button>
       </div>
 
@@ -874,19 +848,26 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
           >
             <div className="text-center">
               {isSubmitting ? (
-                <Spin
-                  indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />}
-                />
+                <div className="flex flex-col items-center">
+                  <Spin
+                    indicator={
+                      <LoadingOutlined style={{ fontSize: 32 }} spin />
+                    }
+                  />
+                  <p className="text-sm font-medium mt-3">
+                    {currentUploadPhase === "uploading"
+                      ? `Uploading... ${uploadProgress}%`
+                      : "Processing..."}
+                  </p>
+                </div>
               ) : (
-                <UploadOutlined className="text-3xl text-gray-400 mb-3" />
+                <>
+                  <UploadOutlined className="text-3xl text-gray-400 mb-3" />
+                  <p className="text-sm font-medium mb-1">
+                    Click or drag files to upload
+                  </p>
+                </>
               )}
-              <p className="text-sm font-medium mb-1">
-                {isSubmitting
-                  ? currentUploadPhase === "uploading"
-                    ? `Uploading... ${uploadProgress}%`
-                    : "Processing..."
-                  : "Click or drag files to upload"}
-              </p>
               <p className="text-xs text-gray-500">
                 Images or videos up to 10MB
               </p>
@@ -1117,15 +1098,25 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 p-3 md:p-4 bg-gray-50 rounded-lg text-xs md:text-sm">
               <div>
                 <p className="text-gray-500 mb-1">Product Title</p>
-                <p className="font-medium">iPhone 14 Pro Max</p>
+                <p className="font-medium">
+                  {verificationData?.productTitle || "iPhone 14 Pro Max"}
+                </p>
               </div>
               <div>
                 <p className="text-gray-500 mb-1">Product Description</p>
-                <p className="font-medium">256GB Space Black</p>
+                <p className="font-medium">
+                  {verificationData?.description || "256GB Space Black"}
+                </p>
               </div>
               <div>
                 <p className="text-gray-500 mb-1">Amount to be Paid</p>
-                <p className="font-medium">$999.99</p>
+                <p className="font-medium">
+                  $
+                  {(verificationData?.price
+                    ? verificationData.price / 100
+                    : 999.99
+                  ).toFixed(2)}
+                </p>
               </div>
               <div>
                 <p className="text-gray-500 mb-1">Payment Method</p>
@@ -1186,15 +1177,21 @@ const VerificationMediaContent: React.FC<VerificationMediaContentProps> = ({
           <div className="bg-gray-50 p-3 md:p-4 rounded-lg space-y-2">
             <div className="flex justify-between">
               <span className="text-gray-500">Item:</span>
-              <span className="font-medium">iPhone 14 Pro Max</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Colour:</span>
-              <span className="font-medium">Space Black</span>
+              <span className="font-medium">
+                {verificationData?.productTitle || "iPhone 14 Pro Max"}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Verification ID:</span>
-              <span className="font-medium">#VN-88492</span>
+              <span className="font-medium">
+                {verificationData?.verificationNumber || "#VN-88492"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Status:</span>
+              <span className="font-medium">
+                {verificationData?.status || "Pending"}
+              </span>
             </div>
           </div>
 
