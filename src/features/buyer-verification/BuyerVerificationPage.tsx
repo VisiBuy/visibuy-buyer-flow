@@ -9,7 +9,7 @@ type VerificationResponse = {
   id: string;
   productTitle: string;
   description: string;
-  status: string; // raw string from API
+  status: string; // raw from API
   publicToken: string;
   escrowEnabled: boolean;
   price: string;
@@ -36,19 +36,11 @@ type VerificationResponse = {
   } | null;
 };
 
-/** 🔒 What the UI expects: status is a strict union */
-type PublicStatus = "pending" | "approved" | "rejected";
-
-type VerificationPublicLike = Omit<VerificationResponse, "status"> & {
-  status: PublicStatus;
-};
-
-/** Coerce any backend string into the safe union the UI is typed against */
-function toPublicStatus(status: string): PublicStatus {
+// Optional: keep this helper so status is clean for the UI
+function normalizeStatus(status: string): "pending" | "approved" | "rejected" {
   if (status === "pending" || status === "approved" || status === "rejected") {
     return status;
   }
-  // fallback so TS is happy and UI has a sane state
   return "pending";
 }
 
@@ -69,7 +61,7 @@ export default function BuyerVerificationPage({
 
         const baseUrl = API_BASE_URL;
         if (!baseUrl) {
-          console.log(baseUrl);
+          console.log("API_BASE_URL:", baseUrl);
           throw new Error("API_BASE_URL is not configured");
         }
 
@@ -110,16 +102,17 @@ export default function BuyerVerificationPage({
     );
   }
 
-  // ✅ Map API response → type-safe object that matches the UI expectations
-  const publicVerification: VerificationPublicLike = {
+  // Build the object we pass to the UI
+  const verificationForUi = {
     ...data,
-    status: toPublicStatus(data.status),
+    status: normalizeStatus(data.status),
   };
 
   return (
     <VerificationStage
-      escrowEnabled={publicVerification.escrowEnabled}
-      verification={publicVerification}
+      escrowEnabled={verificationForUi.escrowEnabled}
+      // ⬇️ Cast here to avoid type mismatch with VerificationPublicResponse
+      verification={verificationForUi as any}
     />
   );
 }
