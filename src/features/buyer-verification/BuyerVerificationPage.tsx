@@ -9,7 +9,7 @@ type VerificationResponse = {
   id: string;
   productTitle: string;
   description: string;
-  status: string;
+  status: string; // raw string from API
   publicToken: string;
   escrowEnabled: boolean;
   price: string;
@@ -36,6 +36,22 @@ type VerificationResponse = {
   } | null;
 };
 
+/** 🔒 What the UI expects: status is a strict union */
+type PublicStatus = "pending" | "approved" | "rejected";
+
+type VerificationPublicLike = Omit<VerificationResponse, "status"> & {
+  status: PublicStatus;
+};
+
+/** Coerce any backend string into the safe union the UI is typed against */
+function toPublicStatus(status: string): PublicStatus {
+  if (status === "pending" || status === "approved" || status === "rejected") {
+    return status;
+  }
+  // fallback so TS is happy and UI has a sane state
+  return "pending";
+}
+
 export default function BuyerVerificationPage({
   verificationId,
 }: {
@@ -53,7 +69,7 @@ export default function BuyerVerificationPage({
 
         const baseUrl = API_BASE_URL;
         if (!baseUrl) {
-          console.log(baseUrl)
+          console.log(baseUrl);
           throw new Error("API_BASE_URL is not configured");
         }
 
@@ -94,10 +110,16 @@ export default function BuyerVerificationPage({
     );
   }
 
+  // ✅ Map API response → type-safe object that matches the UI expectations
+  const publicVerification: VerificationPublicLike = {
+    ...data,
+    status: toPublicStatus(data.status),
+  };
+
   return (
     <VerificationStage
-      // escrowEnabled={data.escrowEnabled}
-      verification={data}
+      escrowEnabled={publicVerification.escrowEnabled}
+      verification={publicVerification}
     />
   );
 }
