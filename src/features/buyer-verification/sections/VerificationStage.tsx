@@ -239,7 +239,7 @@ export default function VerificationStage({
           <SellerCard
             name={verification.seller?.name ?? "Seller"}
             trustScore={`${verification.seller?.trustScore ?? 0}/100`}
-            totalApprovals={`${verification.seller?.approvalRate ?? 0}%`}
+            // totalApprovals={`${verification.seller?.approvalRate ?? 0}%`}
           />
         </div>
       </main>
