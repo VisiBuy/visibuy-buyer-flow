@@ -44,7 +44,9 @@ export default function HomePage() {
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
-                href="/how-it-works"
+                href="https://visibuy.com.ng/how-its-works"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex h-11 items-center justify-center rounded-lg bg-[#007BFF] px-5 text-sm font-semibold text-white hover:bg-[#0065d6]"
               >
                 How verification works
