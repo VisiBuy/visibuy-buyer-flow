@@ -86,6 +86,75 @@ export default function BuyerVerificationPage({
     loadVerification();
   }, [verificationId]);
 
+  // ------- NEW: centralised API handlers -------
+
+  async function handleApproveApi() {
+    if (!data) return;
+
+    const baseUrl = API_BASE_URL;
+    if (!baseUrl) {
+      throw new Error("API_BASE_URL is not configured");
+    }
+
+    const res = await fetch(`${baseUrl}/verifications/public/${verificationId}/approve`, {
+      method: "POST", // change to PATCH if your backend uses that
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (!res.ok) {
+      let message = "Failed to approve verification.";
+      try {
+        const json = await res.json();
+        if (json?.message) message = json.message;
+      } catch {
+        // ignore JSON parse error and keep default message
+      }
+      // 🔴 IMPORTANT: throw so VerificationStage knows it failed
+      throw new Error(message);
+    }
+
+    // ✅ backend success – keep local state in sync
+    setData((prev) => (prev ? { ...prev, status: "approved" } : prev));
+  }
+
+  async function handleRejectApi(payload: { reason: string; comment?: string }) {
+    if (!data) return;
+
+    const baseUrl = API_BASE_URL;
+    if (!baseUrl) {
+      throw new Error("API_BASE_URL is not configured");
+    }
+
+    const res = await fetch(`${baseUrl}/verifications/public/${verificationId}/reject`, {
+      method: "POST", // change to PATCH if needed
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        reason: payload.reason,
+        comment: payload.comment ?? null,
+      }),
+    });
+
+    if (!res.ok) {
+      let message = "Failed to reject verification.";
+      try {
+        const json = await res.json();
+        if (json?.message) message = json.message;
+      } catch {
+        // ignore JSON parse error
+      }
+      throw new Error(message);
+    }
+
+    setData((prev) => (prev ? { ...prev, status: "rejected" } : prev));
+  }
+
+  // --------------------------------------------
+
   if (loading) {
     return (
       <div className="py-24 text-center text-sm">
@@ -111,8 +180,9 @@ export default function BuyerVerificationPage({
   return (
     <VerificationStage
       escrowEnabled={verificationForUi.escrowEnabled}
-      // ⬇️ Cast here to avoid type mismatch with VerificationPublicResponse
       verification={verificationForUi as any}
+      onApprove={handleApproveApi}
+      onReject={handleRejectApi}
     />
   );
 }

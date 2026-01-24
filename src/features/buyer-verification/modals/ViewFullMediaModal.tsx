@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { ZoomableMedia } from "../components/ZoomableMedia";
+import { BrandLogo } from "@/shared/components/ui/BrandLogo";
 
 type MediaItem = {
   id: string;
   src: string;
   alt: string;
+  type?: "image" | "video";
 };
 
 type ViewFullMediaModalProps = {
@@ -15,6 +17,18 @@ type ViewFullMediaModalProps = {
   mainMedia: MediaItem;
   thumbnails?: MediaItem[];
 };
+
+// Same helper we used in MediaGallery
+function isLikelyVideoUrl(url: string): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("/video/upload") ||
+    lower.endsWith(".mp4") ||
+    lower.endsWith(".mov") ||
+    lower.endsWith(".webm")
+  );
+}
 
 export function ViewFullMediaModal({
   open,
@@ -41,7 +55,11 @@ export function ViewFullMediaModal({
 
   if (!open) return null;
 
-  const allThumbs: MediaItem[] = [mainMedia, ...thumbnails];
+  // ensure we don’t duplicate the main media id if it’s already in thumbnails
+  const allThumbs: MediaItem[] = [
+    mainMedia,
+    ...thumbnails.filter((t) => t.id !== mainMedia.id),
+  ];
 
   return (
     <div
@@ -55,12 +73,7 @@ export function ViewFullMediaModal({
         {/* Top bar (logo + close) */}
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-3">
           <div className="flex items-center gap-2">
-            <span className="text-xl font-extrabold text-[var(--brand-colorvisibuy-blue,#007BFF)] tracking-wide">
-              VISIBUY
-            </span>
-            <span className="rounded-md bg-[var(--variable-collection-secondarycolor,#C8E2FF)] px-2.5 py-0.5 text-xs font-semibold text-[#007AFF]">
-              Beta
-            </span>
+            <BrandLogo size={136} showTagline={false} />
           </div>
 
           <button
@@ -77,19 +90,11 @@ export function ViewFullMediaModal({
         <div className="max-h-[80vh] overflow-auto space-y-4 px-6 py-4">
           {/* Big zoomable viewer */}
           <div className="relative">
-            {/* Floating close button on the media */}
-            {/* <button
-              onClick={onClose}
-              className="absolute right-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black"
-              aria-label="Close"
-            >
-              ✕
-            </button> */}
-
             <ZoomableMedia
               key={activeMedia.id} // reset zoom when switching
               src={activeMedia.src}
               alt={activeMedia.alt}
+              type={activeMedia.type}
             />
           </div>
 
@@ -98,6 +103,9 @@ export function ViewFullMediaModal({
             <div className="flex flex-wrap gap-3">
               {allThumbs.map((thumb) => {
                 const isActive = thumb.id === activeMedia.id;
+                const isVideo =
+                  thumb.type === "video" || isLikelyVideoUrl(thumb.src);
+
                 return (
                   <button
                     key={thumb.id}
@@ -114,6 +122,11 @@ export function ViewFullMediaModal({
                       alt={thumb.alt}
                       className="h-full w-full object-cover"
                     />
+                    {isVideo && (
+                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs font-semibold text-white/90 bg-black/20">
+                        ▶
+                      </span>
+                    )}
                   </button>
                 );
               })}

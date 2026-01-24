@@ -55,6 +55,8 @@ type VerificationPublicResponse = {
 type VerificationStageProps = {
   verification: VerificationPublicResponse;
   escrowEnabled?: boolean; // keep this so you can override if you want
+  onApprove?: () => Promise<void>;
+  onReject?: (payload: { reason: string; comment?: string }) => Promise<void>;
 };
 
 type Status = "verifying" | "approved" | "rejected";
@@ -65,6 +67,8 @@ type EscrowFlow = "unpaid" | "secured" | "released" | "disputed_under_review";
 export default function VerificationStage({
   verification,
   escrowEnabled,
+  onApprove,
+  onReject,
 }: VerificationStageProps) {
   const escrowOn = escrowEnabled ?? verification.escrowEnabled;
 
@@ -155,20 +159,49 @@ export default function VerificationStage({
 
   /** ACTION HANDLERS **/
   const handleApprove = () => {
+    // Escrow path: just open the prompt (no API call here yet)
     if (escrowOn) {
       setEscrowPromptOpen(true);
-    } else {
-      setStatus("approved");
-      setCompleteOpen(true);
+      return;
     }
+
+    // Non-escrow: call backend first, then update UI on success
+    (async () => {
+      try {
+        if (onApprove) {
+          await onApprove();
+        }
+
+        setStatus("approved");
+        setCompleteOpen(true);
+      } catch (err) {
+        console.error("Approve failed:", err);
+        window.alert(
+          "We couldn't complete this action. Please try again or contact support."
+        );
+      }
+    })();
   };
 
   const handleRejectClick = () => setRejectOpen(true);
 
   const handleRejectConfirm = (payload: { reason: string; comment?: string }) => {
-    setRejectionInfo(payload);
-    setStatus("rejected");
-    setRejectOpen(false);
+    (async () => {
+      try {
+        if (onReject) {
+          await onReject(payload);
+        }
+
+        setRejectionInfo(payload);
+        setStatus("rejected");
+        setRejectOpen(false);
+      } catch (err) {
+        console.error("Reject failed:", err);
+        window.alert(
+          "We couldn't submit your rejection. Please try again or contact support."
+        );
+      }
+    })();
   };
 
   const handleEscrowContinue = () => {
@@ -239,7 +272,6 @@ export default function VerificationStage({
           <SellerCard
             name={verification.seller?.name ?? "Seller"}
             trustScore={`${verification.seller?.trustScore ?? 0}/100`}
-            // totalApprovals={`${verification.seller?.approvalRate ?? 0}%`}
           />
         </div>
       </main>
@@ -431,9 +463,8 @@ function ConfirmationSummary({
           <span className="font-semibold">Verification completed</span>
         </div>
         <p className="text-xs text-slate-500">
-          You approved this item on <span className="font-medium">11 Oct 2025</span>.
-          The seller has been notified and this order is now marked as completed on
-          Visibuy.
+          You approved this item. The seller has been notified and this order is now
+          marked as completed on Visibuy.
         </p>
       </div>
     );
@@ -448,7 +479,7 @@ function ConfirmationSummary({
         <span className="font-semibold text-[#B91C1C]">Verification rejected</span>
       </div>
       <p className="text-xs text-slate-600">
-        You rejected this item on <span className="font-medium">11 Oct 2025</span>.
+        You rejected this item.
         Your reason has been recorded as:{" "}
         <span className="font-medium">
           {humanizeReason(rejectionInfo?.reason ?? "other")}

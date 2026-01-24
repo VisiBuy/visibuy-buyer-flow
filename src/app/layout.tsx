@@ -18,8 +18,19 @@ const openSans = Open_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Visibuy",
-  description: "Visibuy – modern commerce experiences.",
+  title: {
+    default: "Visibuy — Visual Verification for Online Shopping",
+    template: "%s | Visibuy",
+  },
+  description: "Verify products visually before buying. Build trust and shop with confidence.",
+  icons: {
+    icon: [
+      { url: "/favicon-16x16.png", sizes: "16x16" },
+      { url: "/favicon-32x32.png", sizes: "32x32" },
+      { url: "/favicon.ico" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 type RootLayoutProps = {
