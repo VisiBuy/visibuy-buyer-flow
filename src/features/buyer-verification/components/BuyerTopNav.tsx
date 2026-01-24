@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { BrandLogo } from "@/shared/components/ui/BrandLogo";
+
 export function BuyerTopNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -13,13 +15,15 @@ export function BuyerTopNav() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3 lg:px-24">
         {/* Left: Logo */}
         <div className="flex items-center gap-3">
+          <BrandLogo size={136} showTagline={false} /> 
+
           {/* Replace with real logo asset later */}
-          <span className="text-2xl font-extrabold tracking-wide text-[#007BFF]">
+          {/* <span className="text-2xl font-extrabold tracking-wide text-[#007BFF]">
             VISIBUY
           </span>
           <span className="rounded-md bg-[#C8E2FF] px-2.5 py-0.5 text-xs font-semibold text-[#007AFF]">
             Beta
-          </span>
+          </span> */}
         </div>
 
         {/* Center: Nav links (desktop) */}

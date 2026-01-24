@@ -1,5 +1,6 @@
 // components/BuyerFooter.tsx
 "use client";
+import { BrandLogo } from "@/shared/components/ui/BrandLogo";
 
 export function BuyerFooter() {
   return (
@@ -8,16 +9,14 @@ export function BuyerFooter() {
         {/* Left */}
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-extrabold tracking-wide text-[#007BFF]">
-              VISIBUY
-            </span>
-            <span className="rounded-md bg-[#C8E2FF] px-2 py-0.5 text-[10px] font-semibold text-[#007AFF]">
+            <BrandLogo />
+            {/* <span className="rounded-md bg-[#C8E2FF] px-2 py-0.5 text-[10px] font-semibold text-[#007AFF]">
               Beta
-            </span>
+            </span> */}
           </div>
-          <p className="text-xs text-slate-500">
+          {/* <p className="text-xs text-slate-500">
             What you see is what you get.
-          </p>
+          </p> */}
         </div>
 
         {/* Right */}
