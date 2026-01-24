@@ -6,9 +6,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 type ZoomableMediaProps = {
   src: string;
   alt: string;
+  type?: "image" | "video"; // 👈 NEW
 };
 
-export function ZoomableMedia({ src, alt }: ZoomableMediaProps) {
+// Helper: detect video URL (Cloudinary `/video/upload` or common video extensions)
+function isLikelyVideoUrl(url: string): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("/video/upload") ||
+    lower.endsWith(".mp4") ||
+    lower.endsWith(".mov") ||
+    lower.endsWith(".webm")
+  );
+}
+
+export function ZoomableMedia({ src, alt, type }: ZoomableMediaProps) {
+  const [mode, setMode] = useState<"fit" | "fill">("fit");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState(1); // 1 = fit
   const [offset, setOffset] = useState({ x: 0, y: 0 }); // pan offsets
@@ -16,7 +30,37 @@ export function ZoomableMedia({ src, alt }: ZoomableMediaProps) {
   const dragStart = useRef({ x: 0, y: 0 });
   const offsetStart = useRef({ x: 0, y: 0 });
 
-  const [mode, setMode] = useState<"fit" | "fill">("fit"); // 👈 NEW: Fit vs Fill
+  const inferredVideo = isLikelyVideoUrl(src);
+  const isVideo = type === "video" || inferredVideo;
+
+  // 🔹 VIDEO PATH – no next/image here at all
+  if (isVideo) {
+    return (
+      <div className="space-y-3">
+        {/* Simple info bar to match your UI style */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-slate-500">
+            <span className="font-semibold text-slate-700">Video</span>{" "}
+            · Tap play to watch
+          </div>
+        </div>
+
+        <div
+          className="relative w-full overflow-hidden rounded-2xl bg-black"
+          style={{ height: "min(70vh, 520px)" }}
+        >
+          <video
+            src={src}
+            controls
+            playsInline
+            className="h-full w-full rounded-2xl object-contain"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // 🔹 IMAGE PATH – your original zoom logic
 
   const canPan = zoom > 1;
 
@@ -38,6 +82,7 @@ export function ZoomableMedia({ src, alt }: ZoomableMediaProps) {
   // When switching Fit/Fill, reset zoom & pan so it doesn’t feel weird
   useEffect(() => {
     reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   const onDoubleClick = () => {
@@ -77,6 +122,7 @@ export function ZoomableMedia({ src, alt }: ZoomableMediaProps) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cursor = useMemo(() => {
@@ -85,7 +131,7 @@ export function ZoomableMedia({ src, alt }: ZoomableMediaProps) {
   }, [canPan, dragging]);
 
   const imageClass =
-    mode === "fit" ? "object-contain" : "object-cover"; // 👈 HERE: Fit vs Fill
+    mode === "fit" ? "object-contain" : "object-cover"; // Fit vs Fill
 
   return (
     <div className="space-y-3">

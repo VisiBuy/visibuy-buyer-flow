@@ -15,14 +15,26 @@ type MediaGalleryProps = {
   onViewFullMedia?: () => void;
 };
 
+// Small heuristic to avoid sending obvious video URLs to <Image />
+function isLikelyVideoUrl(url: string): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("/video/upload") || // Cloudinary video resource
+    lower.endsWith(".mp4") ||
+    lower.endsWith(".mov") ||
+    lower.endsWith(".webm")
+  );
+}
+
 export function MediaGallery({
   mainMedia,
   thumbnails,
   timestamp,
   onViewFullMedia,
 }: MediaGalleryProps) {
-  // simple safety fallback so src is never empty
   const safeMainSrc = mainMedia?.src || "/placeholder-main.jpg";
+  const mainIsVideo = isLikelyVideoUrl(safeMainSrc);
 
   return (
     <div className="space-y-4">
@@ -41,25 +53,34 @@ export function MediaGallery({
 
       {/* Grid */}
       <div className="grid gap-4 sm:gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
-        {/* MAIN MEDIA – single aspect container so there’s no extra grey */}
-        <button
-          type="button"
+        {/* MAIN MEDIA – now a div, not a button */}
+        <div
           onClick={onViewFullMedia}
-          className="relative w-full overflow-hidden rounded-2xl bg-slate-200 aspect-[4/3]"
+          className="relative w-full overflow-hidden rounded-2xl bg-slate-200 aspect-[4/3] cursor-pointer"
         >
-          <Image
-            src={safeMainSrc}
-            alt={mainMedia?.alt || "Verified product"}
-            fill
-            className="object-cover"
-            sizes="(min-width: 1024px) 720px, 100vw"
-          />
+          {mainIsVideo ? (
+            <video
+              className="h-full w-full object-cover"
+              src={safeMainSrc}
+              controls
+              playsInline
+            />
+          ) : (
+            <Image
+              src={safeMainSrc}
+              alt={mainMedia?.alt || "Verified product"}
+              fill
+              className="object-cover"
+              sizes="(min-width: 1024px) 720px, 100vw"
+            />
+          )}
+
           {timestamp && (
             <div className="absolute inset-x-0 bottom-3 text-center text-2xl font-extrabold text-slate-900/85 drop-shadow-[0_1px_1px_rgba(255,255,255,0.7)] sm:text-3xl">
               {timestamp}
             </div>
           )}
-        </button>
+        </div>
 
         {/* THUMBNAILS */}
         <div
@@ -71,26 +92,44 @@ export function MediaGallery({
             lg:pr-1
           "
         >
-          {thumbnails.map((thumb, idx) => (
-            <button
-              key={thumb.id ?? `thumb-${idx}`}
-              type="button"
-              onClick={onViewFullMedia}
-              className="
-                relative aspect-[4/3] overflow-hidden rounded-2xl bg-slate-200
-                w-28 flex-none
-                lg:w-full
-              "
-            >
-              <Image
-                src={thumb.src}
-                alt={thumb.alt}
-                fill
-                className="object-cover"
-                sizes="(min-width: 1024px) 240px, 30vw"
-              />
-            </button>
-          ))}
+          {thumbnails.map((thumb, idx) => {
+            const isVideoThumb = isLikelyVideoUrl(thumb.src);
+
+            return (
+              <button
+                key={thumb.id ?? `thumb-${idx}`}
+                type="button"
+                onClick={onViewFullMedia}
+                className="
+                  relative aspect-[4/3] overflow-hidden rounded-2xl bg-slate-200
+                  w-28 flex-none
+                  lg:w-full
+                "
+              >
+                {isVideoThumb ? (
+                  <>
+                    {/* use <img> to avoid Next image optimizer for video URLs */}
+                    <img
+                      src={thumb.src}
+                      alt={thumb.alt}
+                      className="h-full w-full object-cover"
+                    />
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs font-semibold text-white/90">
+                      ▶
+                    </span>
+                  </>
+                ) : (
+                  <Image
+                    src={thumb.src}
+                    alt={thumb.alt}
+                    fill
+                    className="object-cover"
+                    sizes="(min-width: 1024px) 240px, 30vw"
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
