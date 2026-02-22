@@ -67,9 +67,9 @@ export function SellerCard({
       </div>
 
       {/* Trust score */}
-      <div className="mt-4 w-full space-y-3">
+      {/* <div className="mt-4 w-full space-y-3">
         <TrustScoreStat value={trustScore} />
-      </div>
+      </div> */}
     </aside>
   );
 }
