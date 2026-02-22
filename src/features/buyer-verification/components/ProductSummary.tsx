@@ -6,6 +6,7 @@ type ProductSummaryProps = {
   title: string;
   verificationNumber: string;
   price: string;
+  verifiedAt?: string; // 🆕 add this
   /**
    * Frontend-only for now.
    * Later this can come from the backend as verification.safetyLevel.
@@ -41,7 +42,8 @@ export function ProductSummary({
   title,
   verificationNumber,
   price,
-  safetyLevel = "ok", // 🔒 default: green
+  verifiedAt, // 🆕 destructure it
+  safetyLevel = "ok",
 }: ProductSummaryProps) {
   const safety = SAFETY_CONFIG[safetyLevel];
 
@@ -49,8 +51,25 @@ export function ProductSummary({
     <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-4">
       <div>
         <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs text-slate-600">{verificationNumber}</p>
+
+        <p className="text-xs text-slate-600">
+          Verification ID:{" "}
+          <span className="font-mono tracking-tight text-slate-700">
+            {verificationNumber}
+          </span>
+        </p>
+
         <p className="mt-1 text-lg font-semibold">{price}</p>
+
+        {/* 🆕 Verification timestamp */}
+        {verifiedAt && (
+          <p className="mt-1 text-xs text-slate-500">
+            Verified{" "}
+            <span className="font-medium text-slate-700">
+              {verifiedAt}
+            </span>
+          </p>
+        )}
       </div>
 
       {/* Safety badge – frontend-only today */}

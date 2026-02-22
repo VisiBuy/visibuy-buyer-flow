@@ -22,6 +22,8 @@ import { OpenDisputeModal } from "../modals/OpenDisputeModal";
 import { BuyerFooter } from "../components/BuyerFooter";
 import { ConsentBanner } from "../components/ConsentBanner";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL as string;
+
 type VerificationMedia = {
   id: string;
   type: "image" | "video";
@@ -54,14 +56,13 @@ type VerificationPublicResponse = {
 
 type VerificationStageProps = {
   verification: VerificationPublicResponse;
-  escrowEnabled?: boolean; // keep this so you can override if you want
+  escrowEnabled?: boolean;
   onApprove?: () => Promise<void>;
   onReject?: (payload: { reason: string; comment?: string }) => Promise<void>;
 };
 
 type Status = "verifying" | "approved" | "rejected";
 type StepKey = "verification" | "payment" | "confirmation";
-
 type EscrowFlow = "unpaid" | "secured" | "released" | "disputed_under_review";
 
 export default function VerificationStage({
@@ -88,7 +89,7 @@ export default function VerificationStage({
     Record<string, FormDataEntryValue> | null
   >(null);
 
-  // Flutterwave modal + escrow flow state
+  // Flutterwave modal + escrow flow state (modal will be phased out later)
   const [flutterwaveOpen, setFlutterwaveOpen] = useState(false);
   const [escrowTxRef, setEscrowTxRef] = useState<string | null>(null);
   const [escrowFlow, setEscrowFlow] = useState<EscrowFlow>("unpaid");
@@ -121,15 +122,15 @@ export default function VerificationStage({
     comment?: string;
   } | null>(null);
 
-  // ===== DATA WIRED FROM API (NO CSS CHANGES) =====
+  // ===== DATA WIRED FROM API =====
   const itemName = verification.productTitle;
-  const itemColour = ""; // keep for now (you don’t have it in the API body)
-  const verificationId = shortCodeFromToken(verification.publicToken);
-  const price = String(verification.price ?? "0"); // numeric string
+  const itemColour = ""; // API doesn’t expose colour yet
+  const verificationShortId = shortCodeFromToken(verification.publicToken);
+  const price = String(verification.price ?? "0");
   const currency: "NGN" = "NGN";
 
   const priceDisplay = `₦${Number(price).toLocaleString()}`;
-
+  const verifiedAtLabel = formatVerificationTimestamp(verification.createdAt);
   const timestamp = formatStampDDMMYYYY(verification.createdAt);
 
   const { mainMedia, thumbnails } = buildMediaForGallery(verification.media);
@@ -141,13 +142,10 @@ export default function VerificationStage({
       return "confirmation";
     }
 
-    // escrow enabled
     if (status === "verifying") return "verification";
     if (status === "rejected") return "confirmation";
 
-    // escrow enabled + approved
     if (status === "approved") {
-      // once escrow is released or dispute submitted → go to confirmation step
       if (escrowFlow === "released" || escrowFlow === "disputed_under_review") {
         return "confirmation";
       }
@@ -159,19 +157,16 @@ export default function VerificationStage({
 
   /** ACTION HANDLERS **/
   const handleApprove = () => {
-    // Escrow path: just open the prompt (no API call here yet)
     if (escrowOn) {
       setEscrowPromptOpen(true);
       return;
     }
 
-    // Non-escrow: call backend first, then update UI on success
     (async () => {
       try {
         if (onApprove) {
           await onApprove();
         }
-
         setStatus("approved");
         setCompleteOpen(true);
       } catch (err) {
@@ -228,11 +223,12 @@ export default function VerificationStage({
 
             <ProductSummary
               title={itemName}
-              verificationNumber={verificationId}
+              verificationNumber={verificationShortId}
               price={priceDisplay}
+              verifiedAt={verifiedAtLabel}
             />
 
-            <EscrowInfo escrowEnabled={escrowOn} />
+            {/* <EscrowInfo escrowEnabled={escrowOn} /> */}
 
             {status === "verifying" ? (
               <VerificationActions
@@ -240,7 +236,6 @@ export default function VerificationStage({
                 onReject={handleRejectClick}
               />
             ) : escrowOn && status === "approved" ? (
-              // ESCROW PATH (approved)
               paymentContext ? (
                 escrowFlow === "secured" ? (
                   <EscrowPostPaymentPanel
@@ -264,7 +259,6 @@ export default function VerificationStage({
                 <EscrowPaymentSummary onProceed={() => setBuyerStep1Open(true)} />
               )
             ) : (
-              // NON-ESCROW + REJECTED PATHS
               <ConfirmationSummary status={status} rejectionInfo={rejectionInfo} />
             )}
           </section>
@@ -300,7 +294,7 @@ export default function VerificationStage({
         onConfirm={handleRejectConfirm}
         itemName={itemName}
         colour={itemColour}
-        verificationId={verificationId}
+        verificationId={verificationShortId}
       />
 
       {/* Escrow prompt modal */}
@@ -338,7 +332,7 @@ export default function VerificationStage({
         productTitle={itemName}
         productDescription={verification.description}
         amount={price}
-        onSubmit={(orderPayload) => {
+        onSubmit={async (orderPayload) => {
           const fullPayload = {
             ...(buyerDraft ?? {}),
             ...orderPayload,
@@ -353,23 +347,75 @@ export default function VerificationStage({
           const order = {
             amount: Number(fullPayload.amount ?? price),
             currency,
-            verificationId,
+            verificationId: verification.id,
             title: "Visibuy Escrow Payment",
-            description: "Payment is held securely until you confirm delivery.",
+            description:
+              "Payment is held securely until you confirm delivery on Visibuy.",
             productTitle: String(fullPayload.productTitle ?? itemName),
             productDescription: String(
               fullPayload.productDescription ?? verification.description
             ),
           };
 
+          // We keep this so later we can use it once we wire full escrow state
           setPaymentContext({ buyer, order });
 
-          setBuyerStep2Open(false);
-          setFlutterwaveOpen(true);
+          try {
+            if (!API_BASE_URL) {
+              throw new Error("API_BASE_URL is not configured");
+            }
+
+            const res = await fetch(
+              `${API_BASE_URL}/verifications/${verification.id}/escrow-payment`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  buyerEmail: buyer.email,
+                  buyerName: buyer.fullName,
+                }),
+              }
+            );
+
+            if (!res.ok) {
+              let message = "Failed to create escrow payment.";
+              try {
+                const json = await res.json();
+                if (json?.message) message = json.message;
+              } catch {
+                // ignore
+              }
+              throw new Error(message);
+            }
+
+            const json = await res.json();
+            const paymentUrl = json?.data?.paymentUrl;
+            const reference = json?.data?.reference ?? null;
+
+            if (!paymentUrl) {
+              throw new Error("No payment URL returned from escrow endpoint.");
+            }
+
+            // Optional: keep a local ref for later UX
+            setEscrowTxRef(reference);
+
+            // Close modal before redirect
+            setBuyerStep2Open(false);
+
+            // Redirect to Flutterwave hosted checkout
+            window.location.href = paymentUrl;
+          } catch (err) {
+            console.error("Escrow payment creation failed:", err);
+            window.alert(
+              "We couldn't start the payment. Please check your connection and try again."
+            );
+          }
         }}
       />
 
-      {/* Flutterwave modal */}
+      {/* Flutterwave modal (legacy simulation; will be removed in later steps) */}
       {paymentContext && (
         <FlutterwavePaymentModal
           open={flutterwaveOpen}
@@ -377,25 +423,24 @@ export default function VerificationStage({
           buyer={paymentContext.buyer}
           order={paymentContext.order}
           onSuccess={(resp) => {
-            console.log("Flutterwave response:", resp);
+            console.log("Flutterwave response (legacy modal):", resp);
             const txRef =
               (resp as any)?.tx_ref ?? (resp as any)?.transaction_id ?? null;
 
             setEscrowTxRef(txRef);
-            setEscrowFlow("secured"); // 🔐 secured view
+            setEscrowFlow("secured");
             setFlutterwaveOpen(false);
           }}
         />
       )}
 
-      {/* Release payment verification code (sent to email) */}
+      {/* Release payment verification code (still simulated for now) */}
       {paymentContext && (
         <ReleasePaymentCodeModal
           open={releaseModalOpen}
           email={String(paymentContext.buyer.email ?? "")}
           onCancel={() => setReleaseModalOpen(false)}
           onConfirm={(code) => {
-            // simulate verification code
             if (String(code).trim() !== "123456") {
               window.alert('Invalid code. Use "123456" to simulate success.');
               return;
@@ -404,12 +449,12 @@ export default function VerificationStage({
             console.log("Release payment verified with code:", code);
 
             setReleaseModalOpen(false);
-            setEscrowFlow("released"); // ✅ go to confirmation step
+            setEscrowFlow("released");
           }}
         />
       )}
 
-      {/* Open Dispute Modal */}
+      {/* Open Dispute Modal (still simulated for now) */}
       {paymentContext && escrowFlow === "secured" && (
         <OpenDisputeModal
           open={disputeOpen}
@@ -427,7 +472,7 @@ export default function VerificationStage({
             console.log("Dispute submitted:", {
               payload,
               itemName,
-              verificationId,
+              verificationId: verificationShortId,
               amount: paymentContext.order.amount,
               currency: paymentContext.order.currency,
             });
@@ -436,7 +481,7 @@ export default function VerificationStage({
             setEscrowFlow("disputed_under_review");
           }}
           itemName={itemName}
-          verificationId={verificationId}
+          verificationId={verificationShortId}
           amount={paymentContext.order.amount}
           currency={paymentContext.order.currency}
         />
@@ -479,8 +524,7 @@ function ConfirmationSummary({
         <span className="font-semibold text-[#B91C1C]">Verification rejected</span>
       </div>
       <p className="text-xs text-slate-600">
-        You rejected this item.
-        Your reason has been recorded as:{" "}
+        You rejected this item. Your reason has been recorded as:{" "}
         <span className="font-medium">
           {humanizeReason(rejectionInfo?.reason ?? "other")}
         </span>
@@ -533,7 +577,7 @@ function EscrowPostPaymentPanel({
 }: {
   amount: number;
   currency: "NGN";
-  escrowFeeRate: number; // e.g. 0.025 = 2.5%
+  escrowFeeRate: number;
   buyerName: string;
   buyerEmail: string;
   txRef?: string;
@@ -686,20 +730,17 @@ function humanizeReason(code: string): string {
 }
 
 function mapApiStatusToUi(apiStatus: string): Status {
-  // API: approved/rejected/pending
   if (apiStatus === "approved") return "approved";
   if (apiStatus === "rejected") return "rejected";
   return "verifying";
 }
 
 function shortCodeFromToken(token: string): string {
-  // keeps your UI looking like a short “verification number”
   if (!token) return "—";
   return token.replace(/-/g, "").slice(0, 7).toUpperCase();
 }
 
 function formatStampDDMMYYYY(iso: string): string {
-  // returns "06-01-2026" (dd-mm-yyyy)
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   const dd = String(d.getDate()).padStart(2, "0");
@@ -708,10 +749,30 @@ function formatStampDDMMYYYY(iso: string): string {
   return `${dd}-${mm}-${yyyy}`;
 }
 
+function formatVerificationTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const day = String(d.getDate()).padStart(2, "0");
+  const monthNames = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  const month = monthNames[d.getMonth()];
+  const year = d.getFullYear();
+
+  // 12-hour time with AM/PM
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+
+  return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
+}
+
 function buildMediaForGallery(media: VerificationMedia[]) {
   const safe = Array.isArray(media) ? media : [];
 
-  // prefer an image as main if available, otherwise first item
   const main =
     safe.find((m) => m.type === "image") ??
     safe[0] ??
@@ -736,6 +797,5 @@ function buildMediaForGallery(media: VerificationMedia[]) {
       alt: `Thumbnail ${idx + 1}`,
     }));
 
-  // If backend returns only 1 item, keep at least an empty array (your UI can handle it)
   return { mainMedia, thumbnails: thumbs };
 }
