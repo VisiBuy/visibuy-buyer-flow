@@ -42,6 +42,7 @@ export function ViewFullMediaModal({
 }: ViewFullMediaModalProps) {
   const isMobile = useIsMobile();
 
+  // Combine main + thumbnails into a single list
   const allMedia: MediaItem[] = [
     mainMedia,
     ...thumbnails.filter((t) => t.id !== mainMedia.id),
@@ -66,6 +67,7 @@ export function ViewFullMediaModal({
     return () => clearTimeout(timer);
   }, [showHint]);
 
+  // Lock body scroll when open
   useEffect(() => {
     if (open) document.body.style.overflow = "hidden";
     return () => {
@@ -90,12 +92,12 @@ export function ViewFullMediaModal({
     }
   };
 
-  const handleTouchStart = (e: any) => {
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     touchEndX.current = null;
     touchStartX.current = e.targetTouches[0].clientX;
   };
 
-  const handleTouchMove = (e: any) => {
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     touchEndX.current = e.targetTouches[0].clientX;
   };
 
@@ -113,7 +115,11 @@ export function ViewFullMediaModal({
   };
 
   /* =======================================================
-     📱 MOBILE IMMERSIVE VIEW (COMPLETELY SEPARATE)
+     📱 MOBILE IMMERSIVE VIEW
+     - Full screen
+     - No logo
+     - No thumbnails
+     - Swipe left/right + subtle arrows
   ========================================================*/
   if (isMobile) {
     return (
@@ -123,13 +129,14 @@ export function ViewFullMediaModal({
       >
         <div
           className="relative h-screen w-screen"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()} // don't close when tapping image
         >
-          {/* Minimal top bar */}
+          {/* Top-right close button */}
           <div className="absolute top-0 left-0 right-0 flex justify-end p-4 z-10">
             <button
               onClick={onClose}
               className="h-10 w-10 flex items-center justify-center text-white text-lg"
+              aria-label="Close media viewer"
             >
               ✕
             </button>
@@ -142,27 +149,76 @@ export function ViewFullMediaModal({
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            <ZoomableMedia
+                      {/* 🔹 Raw full-screen media for mobile – avoids Next/Image issues */}
+          {activeMedia.type === "video" ? (
+            <video
+              key={activeMedia.id}
+              src={activeMedia.src}
+              controls
+              playsInline
+              className="max-h-full max-w-full object-contain"
+            />
+          ) : (
+            <img
               key={activeMedia.id}
               src={activeMedia.src}
               alt={activeMedia.alt}
-              type={activeMedia.type}
+              className="max-h-full max-w-full object-contain"
             />
+          )}
 
-            {/* Arrows */}
+          {/* Optional very subtle arrows (can delete if you don’t want them) */}
+          {hasMultiple && (
+            <>
+              <button
+                onClick={goPrev}
+                disabled={activeIndex === 0}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-3xl opacity-40"
+              >
+                ‹
+              </button>
+              <button
+                onClick={goNext}
+                disabled={activeIndex === allMedia.length - 1}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white text-3xl opacity-40"
+              >
+                ›
+              </button>
+            </>
+          )}
+
+          {/* Centered swipe hint */}
+          {hasMultiple && showHint && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-full">
+                Swipe left or right to view more proof
+              </div>
+            </div>
+          )}
+
+          {/* Index indicator at the top */}
+          {hasMultiple && (
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1 rounded-full">
+              {activeIndex + 1} / {allMedia.length}
+            </div>
+          )}
+
+            {/* Subtle arrows (optional, still there but not loud) */}
             {hasMultiple && (
               <>
                 <button
                   onClick={goPrev}
                   disabled={activeIndex === 0}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-3xl opacity-80"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-white text-2xl opacity-70 disabled:opacity-20"
+                  aria-label="Previous image"
                 >
                   ‹
                 </button>
                 <button
                   onClick={goNext}
                   disabled={activeIndex === allMedia.length - 1}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white text-3xl opacity-80"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white text-2xl opacity-70 disabled:opacity-20"
+                  aria-label="Next image"
                 >
                   ›
                 </button>
@@ -191,18 +247,18 @@ export function ViewFullMediaModal({
   }
 
   /* =======================================================
-     💻 DESKTOP MODAL (YOUR ORIGINAL STRUCTURE UNTOUCHED)
+     💻 DESKTOP MODAL (UNCHANGED)
   ========================================================*/
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
-      onClick={onClose}
+      onClick={onClose} // click backdrop closes
     >
       <div
         className="relative w-full max-w-5xl rounded-2xl bg-[var(--visibuyb-25,#FBFEFF)] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()} // prevent close when clicking inside
       >
-        {/* Top bar */}
+        {/* Top bar (logo + close) */}
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-3">
           <div className="flex items-center gap-2">
             <BrandLogo size={136} showTagline={false} />
@@ -212,6 +268,7 @@ export function ViewFullMediaModal({
             type="button"
             onClick={onClose}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm hover:bg-slate-100"
+            aria-label="Close media viewer"
           >
             ✕
           </button>
@@ -225,36 +282,35 @@ export function ViewFullMediaModal({
               src={activeMedia.src}
               alt={activeMedia.alt}
               type={activeMedia.type}
+              // ⬆️ no "immersive" here -> desktop keeps Fit/Fill + zoom controls
             />
-
-            {/* Arrows */}
             {hasMultiple && (
-              <>
-                <button
-                  onClick={goPrev}
-                  disabled={activeIndex === 0}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 rounded-full px-3 py-2 shadow"
-                >
-                  ‹
-                </button>
-                <button
-                  onClick={goNext}
-                  disabled={activeIndex === allMedia.length - 1}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 rounded-full px-3 py-2 shadow"
-                >
-                  ›
-                </button>
-              </>
-            )}
+      <>
+        <button
+          type="button"
+          onClick={goPrev}
+          disabled={activeIndex === 0}
+          className="absolute left-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white text-xl hover:bg-black/60 disabled:opacity-30 disabled:hover:bg-black/40"
+          aria-label="Previous media"
+        >
+          ‹
+        </button>
 
-            {/* Center hint */}
-            {hasMultiple && showHint && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="bg-black/60 text-white text-xs px-4 py-2 rounded-full">
-                  Swipe left or right to view more proof
-                </div>
-              </div>
-            )}
+        <button
+          type="button"
+          onClick={goNext}
+          disabled={activeIndex === allMedia.length - 1}
+          className="absolute right-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white text-xl hover:bg-black/60 disabled:opacity-30 disabled:hover:bg-black/40"
+          aria-label="Next media"
+        >
+          ›
+        </button>
+
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
+          {activeIndex + 1} / {allMedia.length}
+        </div>
+      </>
+    )}
           </div>
         </div>
       </div>

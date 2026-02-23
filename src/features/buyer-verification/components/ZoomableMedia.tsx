@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 type ZoomableMediaProps = {
   src: string;
   alt: string;
-  type?: "image" | "video"; // 👈 NEW
+  type?: "image" | "video";
+  immersive?: boolean; // 👈 NEW
 };
 
 // Helper: detect video URL (Cloudinary `/video/upload` or common video extensions)
@@ -21,7 +22,12 @@ function isLikelyVideoUrl(url: string): boolean {
   );
 }
 
-export function ZoomableMedia({ src, alt, type }: ZoomableMediaProps) {
+export function ZoomableMedia({
+  src,
+  alt,
+  type,
+  immersive = false, // 👈 default = old behaviour
+}: ZoomableMediaProps) {
   const [mode, setMode] = useState<"fit" | "fill">("fit");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState(1); // 1 = fit
@@ -33,21 +39,26 @@ export function ZoomableMedia({ src, alt, type }: ZoomableMediaProps) {
   const inferredVideo = isLikelyVideoUrl(src);
   const isVideo = type === "video" || inferredVideo;
 
-  // 🔹 VIDEO PATH – no next/image here at all
+  /* ---------------- VIDEO PATH ---------------- */
   if (isVideo) {
     return (
       <div className="space-y-3">
-        {/* Simple info bar to match your UI style */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-slate-500">
-            <span className="font-semibold text-slate-700">Video</span>{" "}
-            · Tap play to watch
+        {/* Hide the info bar when immersive to keep it clean */}
+        {!immersive && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm text-slate-500">
+              <span className="font-semibold text-slate-700">Video</span> · Tap
+              play to watch
+            </div>
           </div>
-        </div>
+        )}
 
         <div
           className="relative w-full overflow-hidden rounded-2xl bg-black"
-          style={{ height: "min(70vh, 520px)" }}
+          style={{
+            // Only change height in immersive mode
+            height: immersive ? "100vh" : "min(70vh, 520px)",
+          }}
         >
           <video
             src={src}
@@ -60,7 +71,7 @@ export function ZoomableMedia({ src, alt, type }: ZoomableMediaProps) {
     );
   }
 
-  // 🔹 IMAGE PATH – your original zoom logic
+  /* ---------------- IMAGE PATH ---------------- */
 
   const canPan = zoom > 1;
 
@@ -133,69 +144,74 @@ export function ZoomableMedia({ src, alt, type }: ZoomableMediaProps) {
   const imageClass =
     mode === "fit" ? "object-contain" : "object-cover"; // Fit vs Fill
 
+  // 🔹 only change the HEIGHT in immersive mode
+  const containerHeight = immersive ? "100vh" : "min(70vh, 520px)";
+
   return (
     <div className="space-y-3">
-      {/* Top controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Zoom info */}
-        <div className="text-sm text-slate-500">
-          Zoom:{" "}
-          <span className="font-semibold text-slate-700">
-            {Math.round(zoom * 100)}%
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Fit / Fill toggle */}
-          <div className="flex rounded-lg bg-slate-100 p-1 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => setMode("fit")}
-              className={`rounded-md px-2 py-1 ${
-                mode === "fit"
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              Fit
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("fill")}
-              className={`rounded-md px-2 py-1 ${
-                mode === "fill"
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              Fill
-            </button>
+      {/* Top controls – hidden in immersive full-screen */}
+      {!immersive && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Zoom info */}
+          <div className="text-sm text-slate-500">
+            Zoom:{" "}
+            <span className="font-semibold text-slate-700">
+              {Math.round(zoom * 100)}%
+            </span>
           </div>
 
-          {/* Zoom buttons */}
-          <button
-            type="button"
-            onClick={zoomOut}
-            className="h-9 rounded-lg bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={zoomIn}
-            className="h-9 rounded-lg bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            onClick={reset}
-            className="h-9 rounded-lg bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50"
-          >
-            Reset
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Fit / Fill toggle */}
+            <div className="flex rounded-lg bg-slate-100 p-1 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setMode("fit")}
+                className={`rounded-md px-2 py-1 ${
+                  mode === "fit"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Fit
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("fill")}
+                className={`rounded-md px-2 py-1 ${
+                  mode === "fill"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Fill
+              </button>
+            </div>
+
+            {/* Zoom buttons */}
+            <button
+              type="button"
+              onClick={zoomOut}
+              className="h-9 rounded-lg bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={zoomIn}
+              className="h-9 rounded-lg bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              onClick={reset}
+              className="h-9 rounded-lg bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50"
+            >
+              Reset
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Viewer */}
       <div
@@ -208,7 +224,7 @@ export function ZoomableMedia({ src, alt, type }: ZoomableMediaProps) {
         onMouseLeave={stopDragging}
         className="relative w-full overflow-hidden rounded-2xl bg-[#020617]"
         style={{
-          height: "min(70vh, 520px)", // always visible but big
+          height: containerHeight,
           cursor,
           userSelect: "none",
         }}
@@ -224,13 +240,16 @@ export function ZoomableMedia({ src, alt, type }: ZoomableMediaProps) {
           <Image src={src} alt={alt} fill className={imageClass} priority />
         </div>
 
-        <div className="absolute bottom-3 left-3 rounded-lg bg-[#020617]/70 px-3 py-1 text-xs text-white">
-          {zoom === 1
-            ? mode === "fit"
-              ? "Fit: whole image visible • Scroll / pinch to zoom"
-              : "Fill: image fills frame (may crop) • Scroll / pinch to zoom"
-            : "Drag to move • Double-click to reset"}
-        </div>
+        {/* Bottom helper – also hide in immersive */}
+        {!immersive && (
+          <div className="absolute bottom-3 left-3 rounded-lg bg-[#020617]/70 px-3 py-1 text-xs text-white">
+            {zoom === 1
+              ? mode === "fit"
+                ? "Fit: whole image visible • Scroll / pinch to zoom"
+                : "Fill: image fills frame (may crop) • Scroll / pinch to zoom"
+              : "Drag to move • Double-click to reset"}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -773,7 +773,8 @@ function formatVerificationTimestamp(iso: string): string {
 function buildMediaForGallery(media: VerificationMedia[]) {
   const safe = Array.isArray(media) ? media : [];
 
-  const main =
+  // Prefer an image as the main item, otherwise just take the first media
+  const main: VerificationMedia =
     safe.find((m) => m.type === "image") ??
     safe[0] ??
     ({
@@ -783,19 +784,23 @@ function buildMediaForGallery(media: VerificationMedia[]) {
       thumbnailPath: "/placeholder-main.jpg",
     } as VerificationMedia);
 
+  // This is what both MediaGallery + ViewFullMediaModal will see as the first slide
   const mainMedia = {
     id: main.id ?? "main",
-    src: main.storagePath ?? "/placeholder-main.jpg",
+    src: main.storagePath ?? "/placeholder-main.jpg", // ✅ full media
     alt: "Verified product",
+    type: main.type ?? "image",                       // ✅ keep type
   };
 
-  const thumbs = safe
+  // All *other* media items – also full media, not tiny thumbnails
+  const thumbnails = safe
     .filter((m) => m.id !== main.id)
     .map((m, idx) => ({
       id: m.id ?? `t${idx + 1}`,
-      src: m.thumbnailPath || m.storagePath,
-      alt: `Thumbnail ${idx + 1}`,
+      src: m.storagePath ?? m.thumbnailPath,          // ✅ prefer full media
+      alt: `Proof ${idx + 1}`,
+      type: m.type ?? "image",                        // ✅ keep type for video/image
     }));
 
-  return { mainMedia, thumbnails: thumbs };
+  return { mainMedia, thumbnails };
 }
