@@ -78,7 +78,7 @@ export default function VerificationStage({
   );
 
   const [viewFullOpen, setViewFullOpen] = useState(false);
-  const [completeOpen, setCompleteOpen] = useState(false); // non-escrow approval
+  // const [completeOpen, setCompleteOpen] = useState(false); // non-escrow approval
   const [rejectOpen, setRejectOpen] = useState(false);
   const [escrowPromptOpen, setEscrowPromptOpen] = useState(false);
 
@@ -132,6 +132,9 @@ export default function VerificationStage({
   const priceDisplay = `₦${Number(price).toLocaleString()}`;
   const verifiedAtLabel = formatVerificationTimestamp(verification.createdAt);
   const timestamp = formatStampDDMMYYYY(verification.createdAt);
+  const expiryLabel = verification.expiresAt
+  ? formatVerificationTimestamp(verification.expiresAt)
+  : null;
 
   const { mainMedia, thumbnails } = buildMediaForGallery(verification.media);
 
@@ -168,7 +171,7 @@ export default function VerificationStage({
           await onApprove();
         }
         setStatus("approved");
-        setCompleteOpen(true);
+        // setCompleteOpen(true);
       } catch (err) {
         console.error("Approve failed:", err);
         window.alert(
@@ -214,6 +217,9 @@ export default function VerificationStage({
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-24">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,1.4fr)] lg:items-start">
           <section className="space-y-6 rounded-2xl bg-white p-4 sm:p-6 lg:p-7 shadow-sm">
+            <p className="text-body-small text-neutral-600">
+              Check that this matches what you ordered.
+            </p>
             <MediaGallery
               mainMedia={mainMedia}
               thumbnails={thumbnails}
@@ -227,6 +233,17 @@ export default function VerificationStage({
               price={priceDisplay}
               verifiedAt={verifiedAtLabel}
             />
+            <p className="text-body-small text-neutral-600">
+              This is the exact item you will receive — verified before delivery.
+            </p>
+            <div className="rounded-lg bg-[#EAF7EF] p-3 text-sm text-[#1F6B34]">
+              Verified with real photos and video. What you see is what you get.
+            </div>
+            {expiryLabel && (
+              <p className="text-xs text-neutral-500">
+                Verification expires on {expiryLabel}
+              </p>
+            )}
 
             {/* <EscrowInfo escrowEnabled={escrowOn} /> */}
 
@@ -258,9 +275,11 @@ export default function VerificationStage({
               ) : (
                 <EscrowPaymentSummary onProceed={() => setBuyerStep1Open(true)} />
               )
-            ) : (
-              <ConfirmationSummary status={status} rejectionInfo={rejectionInfo} />
-            )}
+            ) : status === "approved" ? (
+                <PostApprovalPanel />
+              ) : (
+                <ConfirmationSummary status={status} rejectionInfo={rejectionInfo} />
+              )}
           </section>
 
           <SellerCard
@@ -282,10 +301,10 @@ export default function VerificationStage({
       />
 
       {/* Non-escrow approval modal */}
-      <VerificationCompleteModal
+      {/* <VerificationCompleteModal
         open={completeOpen}
         onClose={() => setCompleteOpen(false)}
-      />
+      /> */}
 
       {/* Reject flow */}
       <RejectVerificationModal
@@ -539,6 +558,33 @@ function ConfirmationSummary({
   );
 }
 
+function PostApprovalPanel() {
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-100 bg-[#EFF6FF] px-4 py-3 text-sm text-slate-700">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#28A745]/10 text-xs text-[#28A745]">
+          ✓
+        </span>
+
+        <span className="font-semibold">
+          You’ve confirmed this is the exact item
+        </span>
+      </div>
+
+      <p className="text-xs text-slate-600">
+        Continue with the seller to complete your purchase.
+      </p>
+
+      <button
+        className="mt-3 h-10 rounded-lg bg-[#25D366] px-4 text-xs font-semibold text-white"
+        onClick={() => window.open("https://wa.me/", "_blank")}
+      >
+        Continue on WhatsApp →
+      </button>
+    </div>
+  );
+}
+
 /** Escrow payment step summary (before paying) */
 function EscrowPaymentSummary({ onProceed }: { onProceed: () => void }) {
   return (
@@ -753,21 +799,14 @@ function formatVerificationTimestamp(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
 
-  const day = String(d.getDate()).padStart(2, "0");
-  const monthNames = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-  ];
-  const month = monthNames[d.getMonth()];
-  const year = d.getFullYear();
-
-  // 12-hour time with AM/PM
-  let hours = d.getHours();
-  const minutes = String(d.getMinutes()).padStart(2, "0");
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12 || 12;
-
-  return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
+  return d.toLocaleString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 function buildMediaForGallery(media: VerificationMedia[]) {

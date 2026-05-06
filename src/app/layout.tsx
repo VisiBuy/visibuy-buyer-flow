@@ -19,10 +19,13 @@ const openSans = Open_Sans({
 
 export const metadata: Metadata = {
   title: {
-    default: "Visibuy — Visual Verification for Online Shopping",
+    default: "VisiBuy — See Proof of the Exact Item Before You Pay",
     template: "%s | Visibuy",
   },
-  description: "Verify products visually before buying. Build trust and shop with confidence.",
+
+  description:
+    "Review real product photos and video before payment so you can confirm the exact item you’ll receive.",
+
   icons: {
     icon: [
       { url: "/favicon-16x16.png", sizes: "16x16" },
