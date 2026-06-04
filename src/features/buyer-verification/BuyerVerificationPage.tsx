@@ -179,10 +179,7 @@ export default function BuyerVerificationPage({
 
   return (
     <VerificationStage
-      escrowEnabled={verificationForUi.escrowEnabled}
       verification={verificationForUi as any}
-      onApprove={handleApproveApi}
-      onReject={handleRejectApi}
     />
   );
 }
