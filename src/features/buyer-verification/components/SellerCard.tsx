@@ -49,6 +49,8 @@ export function SellerCard({
   };
 
   const tierStyle = tierConfig[tier];
+  const numericScore = Number(trustScore.split("/")[0]);
+  const isNewSeller = numericScore === 0;
 
   return (
     <aside className="flex flex-col items-center gap-4 rounded-2xl bg-white p-7 text-center shadow-sm">
@@ -65,11 +67,17 @@ export function SellerCard({
         <span className="text-sm">{tierStyle.icon}</span>
         <span>{tierStyle.label}</span>
       </div>
-
+      <p className="text-xs text-slate-500">
+        {isNewSeller
+          ? "New seller on Visibuy"
+          : "Trusted seller with verified transactions"}
+      </p>
       {/* Trust score */}
-      {/* <div className="mt-4 w-full space-y-3">
-        <TrustScoreStat value={trustScore} />
-      </div> */}
+      {!isNewSeller && (
+        <div className="mt-4 w-full space-y-3">
+          <TrustScoreStat value={trustScore} />
+        </div>
+      )}
     </aside>
   );
 }
